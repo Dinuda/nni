@@ -6,116 +6,70 @@
 首先，使用 NNI 压缩模型
 ---------------------------------
 
-可使用 NNI 轻松压缩模型。 以剪枝为例，可通过 LevelPruner 对预训练模型剪枝：
+可使用 NNI 轻松压缩模型。 Take pruning for example, you can prune a pretrained model with L2FilterPruner like this
 
 .. code-block:: python
 
-   from nni.algorithms.compression.pytorch.pruning import LevelPruner
-   config_list = [{ 'sparsity': 0.8, 'op_types': ['default'] }]
-   pruner = LevelPruner(model, config_list)
+   from nni.algorithms.compression.pytorch.pruning import L2FilterPruner
+   config_list = [{ 'sparsity': 0.5, 'op_types': ['Conv2d'] }]
+   pruner = L2FilterPruner(model, config_list)
    pruner.compress()
 
-op_type 为 'default' 表示模块类型为 PyTorch 定义在了 :githublink:`default_layers.py <src/sdk/pynni/nni/compression/pytorch/default_layers.py>` 。
+The 'Conv2d' op_type stands for the module types defined in :githublink:`default_layers.py <nni/compression/pytorch/default_layers.py>` for pytorch.
 
-因此 ``{ 'sparsity': 0.8, 'op_types': ['default'] }`` 表示 **所有指定 op_types 的层都会被压缩到 0.8 的稀疏度**。 当调用 ``pruner.compress()`` 时，模型会通过掩码进行压缩。随后还可以微调模型，此时 **被剪除的权重不会被更新**。
+Therefore ``{ 'sparsity': 0.5, 'op_types': ['Conv2d'] }``\ means that **all layers with specified op_types will be compressed with the same 0.5 sparsity**. 当调用 ``pruner.compress()`` 时，模型会通过掩码进行压缩。随后还可以微调模型，此时 **被剪除的权重不会被更新**。
 
 然后，进行自动化
 -------------------------
 
-前面的示例人工选择了 LevelPruner，并对所有层使用了相同的稀疏度，显然这不是最佳方法，因为不同层会有不同的冗余度。 每层的稀疏度都应该仔细调整，以便减少模型性能的下降，可通过 NNI Tuner 来完成。
+The previous example manually chose L2FilterPruner and pruned with a specified sparsity. Different sparsity and different pruners may have different effects on different models. This process can be done with NNI tuners.
 
-首先需要设计搜索空间，这里使用了嵌套的搜索空间，其中包含了选择的剪枝函数以及需要优化稀疏度的层。
-
-.. code-block:: json
-
-   {
-     "prune_method": {
-       "_type": "choice",
-       "_value": [
-         {
-           "_name": "agp",
-           "conv0_sparsity": {
-             "_type": "uniform",
-             "_value": [
-               0.1,
-               0.9
-             ]
-           },
-           "conv1_sparsity": {
-             "_type": "uniform",
-             "_value": [
-               0.1,
-               0.9
-             ]
-           },
-         },
-         {
-           "_name": "level",
-           "conv0_sparsity": {
-             "_type": "uniform",
-             "_value": [
-               0.1,
-               0.9
-             ]
-           },
-           "conv1_sparsity": {
-             "_type": "uniform",
-             "_value": [
-               0.01,
-               0.9
-             ]
-           },
-         }
-       ]
-     }
-   }
-
-然后需要修改几行代码。
+Firstly, modify our codes for few lines
 
 .. code-block:: python
 
-   import nni
-   from nni.algorithms.compression.pytorch.pruning import *
-   params = nni.get_parameters()
-   conv0_sparsity = params['prune_method']['conv0_sparsity']
-   conv1_sparsity = params['prune_method']['conv1_sparsity']
-   # 如果需要约束总稀疏度，则应缩放原始稀疏度
-   config_list_level = [{ 'sparsity': conv0_sparsity, 'op_name': 'conv0' },
-                        { 'sparsity': conv1_sparsity, 'op_name': 'conv1' }]
-   config_list_agp = [{'initial_sparsity': 0, 'final_sparsity': conv0_sparsity,
-                       'start_epoch': 0, 'end_epoch': 3,
-                       'frequency': 1,'op_name': 'conv0' },
-                      {'initial_sparsity': 0, 'final_sparsity': conv1_sparsity,
-                       'start_epoch': 0, 'end_epoch': 3,
-                       'frequency': 1,'op_name': 'conv1' },]
-   PRUNERS = {'level':LevelPruner(model, config_list_level), 'agp':AGPPruner(model, config_list_agp)}
-   pruner = PRUNERS(params['prune_method']['_name'])
-   pruner.compress()
-   ... # 微调
-   acc = evaluate(model) # evaluation
-   nni.report_final_results(acc)
+    import nni
+    from nni.algorithms.compression.pytorch.pruning import *
+   
+    params = nni.get_parameters()
+    sparsity = params['sparsity']
+    pruner_name = params['pruner']
+    model_name = params['model']
 
-最后，定义任务，并使用任务来自动修剪层稀疏度。
+    model, pruner = get_model_pruner(model_name, pruner_name, sparsity)
+    pruner.compress()
+
+    train(model)  # your code for fine-tuning the model
+    acc = test(model)  # test the fine-tuned model
+    nni.report_final_results(acc)
+
+Then, define a ``config`` file in YAML to automatically tuning model, pruning algorithm and sparsity.
 
 .. code-block:: yaml
 
-   authorName: default
-   experimentName: Auto_Compression
-   trialConcurrency: 2
-   maxExecDuration: 100h
-   maxTrialNum: 500
-   #choice: local, remote, pai
-   trainingServicePlatform: local
-   #choice: true, false
-   useAnnotation: False
-   searchSpacePath: search_space.json
-   tuner:
-     #choice: TPE, Random, Anneal...
-     builtinTunerName: TPE
-     classArgs:
-       #choice: maximize, minimize
-       optimize_mode: maximize
-   trial:
-     command: bash run_prune.sh
-     codeDir: .
-     gpuNum: 1
+    searchSpace:
+    sparsity:
+      _type: choice
+      _value: [0.25, 0.5, 0.75]
+    pruner:
+      _type: choice
+      _value: ['slim', 'l2filter', 'fpgm', 'apoz']
+    model:
+      _type: choice
+      _value: ['vgg16', 'vgg19']
+    trainingService:
+    platform: local
+    trialCodeDirectory: .
+    trialCommand: python3 basic_pruners_torch.py --nni
+    trialConcurrency: 1
+    trialGpuNumber: 0
+    tuner:
+      name: grid
+
+The full example can be found :githublink:`here <examples/model_compress/pruning/config.yml>`
+
+Finally, start the searching via
+
+.. code-block:: bash
+
+   nnictl create -c config.yml

@@ -40,39 +40,28 @@ NNI 是一个能进行自动机器学习实验的工具包。 它可以自动进
 
 .. code-block:: python
 
-   def run_trial(params):
-       # 输入数据
-       mnist = input_data.read_data_sets(params['data_dir'], one_hot=True)
-       # 构建网络
-       mnist_network = MnistNetwork(channel_1_num=params['channel_1_num'],
-                                    channel_2_num=params['channel_2_num'],
-                                    conv_size=params['conv_size'],
-                                    hidden_size=params['hidden_size'],
-                                    pool_size=params['pool_size'],
-                                    learning_rate=params['learning_rate'])
-       mnist_network.build_network()
-
-       test_acc = 0.0
-       with tf.Session() as sess:
-           # 训练网络
-           mnist_network.train(sess, mnist)
-           # 评估网络
-           test_acc = mnist_network.evaluate(mnist)
-
-   if __name__ == '__main__':
-       params = {'data_dir': '/tmp/tensorflow/mnist/input_data',
-                 'dropout_rate': 0.5,
-                 'channel_1_num': 32,
-                 'channel_2_num': 64,
-                 'conv_size': 5,
-                 'pool_size': 2,
-                 'hidden_size': 1024,
-                 'learning_rate': 1e-4,
-                 'batch_num': 2000,
-                 'batch_size': 32}
-       run_trial(params)
-
-完整实现请参考 :githublink:`examples/trials/mnist-tfv1/mnist_before.py <examples/trials/mnist-tfv1/mnist_before.py>` 。
+    def main(args):
+        # 下载数据
+        train_loader = torch.utils.data.DataLoader(datasets.MNIST(...), batch_size=args['batch_size'], shuffle=True)
+        test_loader = torch.tuils.data.DataLoader(datasets.MNIST(...), batch_size=1000, shuffle=True)
+        # 构建模型
+        model = Net(hidden_size=args['hidden_size'])
+        optimizer = optim.SGD(model.parameters(), lr=args['lr'], momentum=args['momentum'])
+        # 训练
+        for epoch in range(10):
+            train(args, model, device, train_loader, optimizer, epoch)
+            test_acc = test(args, model, device, test_loader)
+            print(test_acc)
+        print('final accuracy:', test_acc)
+         
+    if __name__ == '__main__':
+        params = {
+            'batch_size': 32,
+            'hidden_size': 128,
+            'lr': 0.001,
+            'momentum': 0.5
+        }
+        main(params)
 
 上面的代码一次只能尝试一组参数，如果想要调优学习率，需要手工改动超参，并一次次尝试。
 
@@ -100,42 +89,44 @@ NNI 用来帮助超参调优。它的流程如下：
 
 .. code-block:: diff
 
-   -   params = {'data_dir': '/tmp/tensorflow/mnist/input_data', 'dropout_rate': 0.5, 'channel_1_num': 32, 'channel_2_num': 64,
-   -   'conv_size': 5, 'pool_size': 2, 'hidden_size': 1024, 'learning_rate': 1e-4, 'batch_num': 2000, 'batch_size': 32}
-   + {
-   +     "dropout_rate":{"_type":"uniform","_value":[0.5, 0.9]},
-   +     "conv_size":{"_type":"choice","_value":[2,3,5,7]},
-   +     "hidden_size":{"_type":"choice","_value":[124, 512, 1024]},
-   +     "batch_size": {"_type":"choice", "_value": [1, 4, 8, 16, 32]},
-   +     "learning_rate":{"_type":"choice","_value":[0.0001, 0.001, 0.01, 0.1]}
-   + }
+    -   params = {'batch_size': 32, 'hidden_size': 128, 'lr': 0.001, 'momentum': 0.5}
+    +   {
+    +       "batch_size": {"_type":"choice", "_value": [16, 32, 64, 128]},
+    +       "hidden_size":{"_type":"choice","_value":[128, 256, 512, 1024]},
+    +       "lr":{"_type":"choice","_value":[0.0001, 0.001, 0.01, 0.1]},
+    +       "momentum":{"_type":"uniform","_value":[0, 1]}
+    +   }
 
-*示例:* :githublink:`search_space.json <examples/trials/mnist-tfv1/search_space.json>`
+*示例:* :githublink:`search_space.json <examples/trials/mnist-pytorch/search_space.json>`
 
 **第二步** ：修改 ``Trial`` 代码来从 NNI 获取超参，并返回 NNI 最终结果。
 
 .. code-block:: diff
 
-   + import nni
+    + import nni
 
-     def run_trial(params):
-         mnist = input_data.read_data_sets(params['data_dir'], one_hot=True)
+      def main(args):
+          # 下载数据
+          train_loader = torch.utils.data.DataLoader(datasets.MNIST(...), batch_size=args['batch_size'], shuffle=True)
+          test_loader = torch.tuils.data.DataLoader(datasets.MNIST(...), batch_size=1000, shuffle=True)
+          # 构造模型
+          model = Net(hidden_size=args['hidden_size'])
+          optimizer = optim.SGD(model.parameters(), lr=args['lr'], momentum=args['momentum'])
+          # 训练
+          for epoch in range(10):
+              train(args, model, device, train_loader, optimizer, epoch)
+              test_acc = test(args, model, device, test_loader)
+    -         print(test_acc)
+    +         nni.report_intermeidate_result(test_acc)
+    -     print('final accuracy:', test_acc)
+    +     nni.report_final_result(test_acc)
+           
+      if __name__ == '__main__':
+    -     params = {'batch_size': 32, 'hidden_size': 128, 'lr': 0.001, 'momentum': 0.5}
+    +     params = nni.get_next_parameter()
+          main(params)
 
-         mnist_network = MnistNetwork(channel_1_num=params['channel_1_num'], channel_2_num=params['channel_2_num'], conv_size=params['conv_size'], hidden_size=params['hidden_size'], pool_size=params['pool_size'], learning_rate=params['learning_rate'])
-         mnist_network.build_network()
-
-         with tf.Session() as sess:
-             mnist_network.train(sess, mnist)
-             test_acc = mnist_network.evaluate(mnist)
-   +         nni.report_final_result(test_acc)
-
-     if __name__ == '__main__':
-   -     params = {'data_dir': '/tmp/tensorflow/mnist/input_data', 'dropout_rate': 0.5, 'channel_1_num': 32, 'channel_2_num': 64,
-   -     'conv_size': 5, 'pool_size': 2, 'hidden_size': 1024, 'learning_rate': 1e-4, 'batch_num': 2000, 'batch_size': 32}
-   +     params = nni.get_next_parameter()
-         run_trial(params)
-
-*示例:* :githublink:`mnist.py <examples/trials/mnist-tfv1/mnist.py>`
+*示例:* :githublink:`mnist.py <examples/trials/mnist-pytorch/mnist.py>`
 
 **第三步**\ : 定义 YAML 格式的 ``配置`` 文件，声明搜索空间和 Trail 文件的 ``路径`` 。 它还提供其他信息，例如调整算法，最大 Trial 运行次数和最大持续时间的参数。
 
@@ -160,9 +151,9 @@ NNI 用来帮助超参调优。它的流程如下：
 
 .. Note:: 如果要使用远程计算机或集群作为 :doc:`训练平台 <../TrainingService/Overview>`，为了避免产生过大的网络压力，NNI 限制了文件的最大数量为 2000，大小为 300 MB。 如果 codeDir 中包含了过多的文件，可添加 ``.nniignore`` 文件来排除部分，与 ``.gitignore`` 文件用法类似。 参考 `git documentation <https://git-scm.com/docs/gitignore#_pattern_format>`__ ，了解更多如何编写此文件的详细信息 _。
 
-*示例：* :githublink:`config.yml <examples/trials/mnist-tfv1/config.yml>` :githublink:`.nniignore <examples/trials/mnist-tfv1/.nniignore>`
+*示例:* :githublink:`config.yml <examples/trials/mnist-pytorch/config.yml>` 和 :githublink:`.nniignore <examples/trials/mnist-pytorch/.nniignore>`
 
-上面的代码都已准备好，并保存在 :githublink:`examples/trials/mnist-tfv1/ <examples/trials/mnist-tfv1>`.
+上面的代码都已准备好，并保存在 :githublink:`examples/trials/mnist-pytorch/ <examples/trials/mnist-pytorch>`。
 
 Linux 和 macOS
 ^^^^^^^^^^^^^^^
@@ -171,7 +162,7 @@ Linux 和 macOS
 
 .. code-block:: bash
 
-   nnictl create --config nni/examples/trials/mnist-tfv1/config.yml
+   nnictl create --config nni/examples/trials/mnist-pytorch/config.yml
 
 Windows
 ^^^^^^^
@@ -180,7 +171,7 @@ Windows
 
 .. code-block:: bash
 
-   nnictl create --config nni\examples\trials\mnist-tfv1\config_windows.yml
+   nnictl create --config nni\examples\trials\mnist-pytorch\config_windows.yml
 
 .. Note:: 如果使用 Windows，则需要在 config.yml 文件中，将 ``python3`` 改为 ``python``，或者使用 config_windows.yml 来开始 Experiment。
 
@@ -217,7 +208,7 @@ Windows
 如果根据上述步骤准备好了相应 ``Trial`` ， ``搜索空间`` 和 ``配置`` ，并成功创建的 NNI 任务。NNI 会自动开始通过配置的搜索空间来运行不同的超参集合，搜索最好的超参。 通过 Web 界面可看到 NNI 的进度。
 
 Web 界面
----------------
+-----
 
 启动 Experiment 后，可以在命令行界面找到如下的 ``Web 界面地址`` ：
 
@@ -228,79 +219,42 @@ Web 界面
 在浏览器中打开 ``Web 界面地址`` （即：`` [IP 地址]:8080`` ），就可以看到 Experiment 的详细信息，以及所有的 Trial 任务。 如果无法打开终端中的 Web 界面链接，可以参考 `常见问题 <FAQ.rst>`__。
 
 查看概要页面
-^^^^^^^^^^^^^^^^^
-
-点击 "Overview" 标签。
-
-Experiment 相关信息会显示在界面上，配置和搜索空间等。 可通过 **Download** 按钮来下载信息和参数。 可以在 Experiment 运行时随时下载结果，也可以等到执行结束。
+^^^^^^^^^^^^^^^^^^
 
 
-.. image:: ../../img/QuickStart1.png
-   :target: ../../img/QuickStart1.png
-   :alt: 
+Experiment 相关信息会显示在界面上，配置和搜索空间等。 NNI 还支持通过 **Experiment summary** 按钮下载这些信息和参数。
 
 
-前 10 个 Trial 将列在 Overview 页上。 可以在 "Trials Detail" 页面上浏览所有 Trial。
+.. image:: ../../img/webui-img/full-oview.png
+   :target: ../../img/webui-img/full-oview.png
+   :alt: overview
 
-
-.. image:: ../../img/QuickStart2.png
-   :target: ../../img/QuickStart2.png
-   :alt: 
 
 
 查看 Trial 详情页面
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-点击 "Default Metric" 来查看所有 Trial 的点图。 悬停鼠标来查看默认指标和搜索空间信息。
+可以在此页面中看到最佳的试用指标和超参数图。 当您单击按钮 ``Add/Remove columns`` 时，表格内容包括更多列。
 
 
-.. image:: ../../img/QuickStart3.png
-   :target: ../../img/QuickStart3.png
-   :alt: 
-
-
-点击 "Hyper Parameter" 标签查看图像。
-
-
-* 可选择百分比查看最好的 Trial。
-* 选择两个轴来交换位置。
-
-
-.. image:: ../../img/QuickStart4.png
-   :target: ../../img/QuickStart4.png
-   :alt: 
-
-
-点击 "Trial Duration" 标签来查看柱状图。
-
-
-.. image:: ../../img/QuickStart5.png
-   :target: ../../img/QuickStart5.png
-   :alt: 
-
-
-下面是所有 Trial 的状态。 特别是：
-
-
-* Trial 详情：Trial 的 id，持续时间，开始时间，结束时间，状态，精度和搜索空间文件。
-* 如果在 OpenPAI 平台上运行，还可以看到 hdfsLog。
-* Kill: 可结束在 ``Running`` 状态的任务。
-* Support: 用于搜索某个指定的 Trial。
-
-
-.. image:: ../../img/QuickStart6.png
-   :target: ../../img/QuickStart6.png
-   :alt: 
+.. image:: ../../img/webui-img/full-detail.png
+   :target: ../../img/webui-img/full-detail.png
+   :alt: detail
 
 
 
-* 中间结果图
+查看 Experiment 管理页面
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``All experiments`` 页面可以查看计算机上的所有实验。 
+
+.. image:: ../../img/webui-img/managerExperimentList/expList.png
+   :target: ../../img/webui-img/managerExperimentList/expList.png
+   :alt: Experiments list
 
 
-.. image:: ../../img/QuickStart7.png
-   :target: ../../img/QuickStart7.png
-   :alt: 
 
+更多信息可参考 `此文档 <./WebUI.rst>`__。
 
 相关主题
 -------------
@@ -310,7 +264,7 @@ Experiment 相关信息会显示在界面上，配置和搜索空间等。 可�
 * `尝试不同的 Assessor <../Assessor/BuiltinAssessor.rst>`__
 * `如何使用命令行工具 nnictl <Nnictl.rst>`__
 * `如何实现 Trial 代码 <../TrialExample/Trials.rst>`__
-* `如何在本机运行 Experiment (支持多 GPU 卡)？ <../TrainingService/LocalMode.rst>`__
+* 如何在本机运行 Experiment (支持多 GPU 卡)？ <../TrainingService/LocalMode.rst>`__
 * `如何在多机上运行 Experiment？ <../TrainingService/RemoteMachineMode.rst>`__
 * `如何在 OpenPAI 上运行 Experiment？ <../TrainingService/PaiMode.rst>`__
 * `如何通过 Kubeflow 在 Kubernetes 上运行 Experiment？ <../TrainingService/KubeflowMode.rst>`__

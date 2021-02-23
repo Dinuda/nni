@@ -4,7 +4,7 @@ NAS 可视化（测试版）
 内置 Trainer 支持
 -------------------------
 
-当前，仅 ENAS 和 DARTS 支持可视化。 `ENAS <./ENAS.rst>`__ 和 `DARTS <./DARTS.rst>`__ 的示例演示了如何在代码中启用可视化，其需要在 ``trainer.train()`` 前添加代码。
+当前，仅 ENAS 和 DARTS 支持可视化。 Examples of `ENAS <./ENAS.rst>`__ and `DARTS <./DARTS.rst>`__ has demonstrated how to enable visualization in your code, namely, adding this before ``trainer.train()``\ :
 
 .. code-block:: python
 
@@ -21,7 +21,7 @@ NAS 可视化（测试版）
 可视化定制的 Trainer
 ------------------------------
 
-如果要定制 Trainer，参考 `文档 <./Advanced.rst>`__。
+如果要定制 Trainer，参考 `文档 <./Advanced.rst#extend-the-ability-of-one-shot-trainers>`__。
 
 需要对已有 Trainer 代码做两处改动来支持可视化：
 

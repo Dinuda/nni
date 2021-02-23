@@ -8,7 +8,7 @@
 模型压缩快速入门
 -------------------------------
 
-NNI 为模型压缩提供了非常简单的 API。 压缩包括剪枝和量化算法。 它们的用法相同，这里通过 `slim pruner </Compression/Pruner.html#slim-pruner>`__ 来演示如何使用。
+NNI 为模型压缩提供了非常简单的 API。 压缩包括剪枝和量化算法。 它们的用法相同，这里通过 `slim pruner </Compression/Pruner.rst#slim-pruner>`__ 来演示如何使用。
 
 编写配置
 ^^^^^^^^^^^^^^^^^^^
@@ -45,7 +45,7 @@ NNI 为模型压缩提供了非常简单的 API。 压缩包括剪枝和量化�
 
    pruner.export_model(model_path='pruned_vgg19_cifar10.pth', mask_path='mask_vgg19_cifar10.pth')
 
-模型完整的示例代码在 :githublink:`这里 <examples/model_compress/model_prune_torch.py>`.
+Please refer :githublink:`mnist example <examples/model_compress/pruning/naive_prune_torch.py>` for quick start.
 
 加速模型
 ^^^^^^^^^^^^^^^^^^
@@ -73,22 +73,13 @@ PyTorch 代码
    pruner = LevelPruner(model, config_list)
    pruner.compress()
 
-TensorFlow 代码
-
-.. code-block:: python
-
-   from nni.algorithms.compression.tensorflow.pruning import LevelPruner
-   config_list = [{ 'sparsity': 0.8, 'op_types': ['default'] }]
-   pruner = LevelPruner(tf.get_default_graph(), config_list)
-   pruner.compress()
-
-可使用 ``nni.compression`` 中的其它压缩算法。 此算法分别在 ``nni.compression.torch`` 和 ``nni.compression.tensorflow`` 中实现，支持 PyTorch 和 TensorFlow（部分支持）。 参考 `Pruner <./Pruner.md>`__ 和 `Quantizer <./Quantizer.md>`__ 进一步了解支持的算法。 此外，如果要使用知识蒸馏算法，可参考 `KD 示例 <../TrialExample/KDExample.rst>`__ 。
+可使用 ``nni.compression`` 中的其它压缩算法。 此算法分别在 ``nni.compression.torch`` 和 ``nni.compression.tensorflow`` 中实现，支持 PyTorch 和 TensorFlow（部分支持）。 参考 `Pruner <./Pruner.rst>`__ 和 `Quantizer <./Quantizer.rst>`__ 进一步了解支持的算法。 此外，如果要使用知识蒸馏算法，可参考 `KD 示例 <../TrialExample/KDExample.rst>`__ 。
 
 压缩算法首先通过传入 ``config_list`` 来实例化。 ``config_list`` 会稍后介绍。
 
 函数调用 ``pruner.compress()`` 来修改用户定义的模型（在 Tensorflow 中，通过 ``tf.get_default_graph()`` 来获得模型，而 PyTorch 中 model 是定义的模型类），并修改模型来插入 mask。 然后运行模型时，这些 mask 即会生效。 掩码可在运行时通过算法来调整。
 
-*注意，``pruner.compress`` 只会在模型权重上直接增加掩码，不包括调优的逻辑。 如果要想调优压缩后的模型，需要在 ``pruner.compress`` 后增加调优的逻辑。*
+注意，``pruner.compress`` 只会在模型权重上直接增加掩码，不包括调优的逻辑。 如果要想调优压缩后的模型，需要在 ``pruner.compress`` 后增加调优的逻辑。
 
 ``config_list`` 说明
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -104,7 +95,7 @@ TensorFlow 代码
 * **op_names**：指定需要压缩的操作的名称。 如果没有设置此字段，操作符不会通过名称筛选。
 * **exclude**：默认为 False。 如果此字段为 True，表示要通过类型和名称，将一些操作从压缩中排除。
 
-其它算法的键值，可参考 `剪枝算法 <./Pruner.md>`__ 和 `量化算法 <./Quantizer.rst>`__，查看每个算法的键值。
+其它算法的键值，可参考 `剪枝算法 <./Pruner.rst>`__ 和 `量化算法 <./Quantizer.rst>`__，查看每个算法的键值。
 
 配置的简单示例如下：
 
@@ -190,14 +181,14 @@ TensorFlow 代码
 更新优化状态的 API
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-一些压缩算法使用 Epoch 来控制压缩进度 （如 `AGP </Compression/Pruner.html#agp-pruner>`__），一些算法需要在每个批处理步骤后执行一些逻辑。 因此，NNI 提供了两个 API：``pruner.update_epoch(epoch)`` 和 ``pruner.step()``。
+一些压缩算法使用 Epoch 来控制压缩进度 （如 `AGP </Compression/Pruner.rst#agp-pruner>`__），一些算法需要在每个批处理步骤后执行一些逻辑。 因此，NNI 提供了两个 API：``pruner.update_epoch(epoch)`` 和 ``pruner.step()``。
 
 ``update_epoch`` 会在每个 Epoch 时调用，而 ``step`` 会在每次批处理后调用。 注意，大多数算法不需要调用这两个 API。 详细情况可参考具体算法文档。 对于不需要这两个 API 的算法，可以调用它们，但不会有实际作用。
 
-导出压缩模型
-^^^^^^^^^^^^^^^^^^^^^^^
+导出裁剪后的模型
+^^^^^^^^^^^^^^^^^^^^
 
-使用下列 API 可轻松将压缩后的模型导出，稀疏模型的 ``state_dict`` 会保存在 ``model.pth`` 文件中，可通过 ``torch.load('model.pth')`` 加载。 在导出的 ``model.pth`` 中，被掩码遮盖的权重为零。
+使用下列 API 可轻松将裁剪后的模型导出，稀疏模型的 ``state_dict`` 会保存在 ``model.pth`` 文件中，可通过 ``torch.load('model.pth')`` 加载。 在导出的 ``model.pth`` 中，被掩码遮盖的权重为零。
 
 .. code-block:: bash
 
@@ -208,5 +199,44 @@ TensorFlow 代码
 .. code-block:: python
 
    pruner.export_model(model_path='model.pth', mask_path='mask.pth', onnx_path='model.onnx', input_shape=[1, 1, 28, 28])
+
+导出量化后的模型
+^^^^^^^^^^^^^^^^^^^^^^
+您可以使用 ``torch.save`` api 直接导出量化模型。量化后的模型可以通过 ``torch.load`` 加载，不需要做任何额外的修改。 下面的例子展示了使用 QAT quantizer 保存、加载量化模型并获取相关参数的过程。
+
+.. code-block:: python
+
+   # 初始化模型并使用 NNI QAT 量化
+   model = Mnist()
+   configure_list = [...]
+   optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
+   quantizer = QAT_Quantizer(model, configure_list, optimizer)
+   quantizer.compress()
+
+   model.to(device)
+   
+   # 训练
+   for epoch in range(40):
+        print('# Epoch {} #'.format(epoch))
+        train(model, quantizer, device, train_loader, optimizer)
+   
+   # 保存使用 NNI QAT 算法生成的量化模型
+   torch.save(model.state_dict(), "quantized_model.pkt")
+
+   # 模拟模型加载过程
+   # 初始化新模型并在加载之前压缩它
+   qmodel_load = Mnist()
+   optimizer = torch.optim.SGD(qmodel_load.parameters(), lr=0.01, momentum=0.5)
+   quantizer = QAT_Quantizer(qmodel_load, configure_list, optimizer)
+   quantizer.compress()
+   
+   # 加载量化的模型
+   qmodel_load.load_state_dict(torch.load("quantized_model.pkt"))
+
+   # 获取加载后模型的 scale, zero_point 和 conv1 的权重
+   conv1 = qmodel_load.conv1
+   scale = conv1.module.scale
+   zero_point = conv1.module.zero_point
+   weight = conv1.module.weight
 
 如果需要实际加速压缩后的模型，参考 `NNI 模型加速 <./ModelSpeedup.rst>`__。
